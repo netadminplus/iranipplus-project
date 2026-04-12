@@ -3,6 +3,7 @@ import { postgresAdapter } from "@payloadcms/db-postgres";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
 import { BlogPosts } from "./collections/BlogPosts";
 import { FAQItems } from "./collections/FAQItems";
+import { Media } from "./collections/Media";
 import { PricingPlans } from "./collections/PricingPlans";
 import { Users } from "./collections/Users";
 import path from "path";
@@ -19,7 +20,7 @@ export default buildConfig({
       titleSuffix: "— ایران آی‌پی پلاس CMS",
     },
   },
-  collections: [Users, BlogPosts, FAQItems, PricingPlans],
+  collections: [Media, Users, BlogPosts, FAQItems, PricingPlans],
   editor: lexicalEditor({}),
   db: postgresAdapter({
     pool: {

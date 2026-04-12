@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(rm *)",
+      "Bash(sleep *)",
+      "Bash(du *)",
+      "Bash(docker compose build)",
+      "Bash(kill *)"
+    ]
+  },
+  "$version": 3
+}
