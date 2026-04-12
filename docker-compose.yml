@@ -1,0 +1,147 @@
+services:
+
+  # ─────────────────────────────────────────
+  # NGINX — Reverse proxy, SSL termination
+  # ─────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: iranipplus_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - cms
+    networks:
+      - iranipplus_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─────────────────────────────────────────
+  # FRONTEND — Next.js 14 (App Router)
+  # ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+    container_name: iranipplus_frontend
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CMS_URL=${CMS_PUBLIC_URL}
+      - NEXT_PUBLIC_SITE_URL=${SITE_URL}
+    depends_on:
+      - cms
+    networks:
+      - iranipplus_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─────────────────────────────────────────
+  # CMS — Payload CMS v3
+  # ─────────────────────────────────────────
+  cms:
+    build:
+      context: ./cms
+      dockerfile: Dockerfile
+      target: runner
+    container_name: iranipplus_cms
+    expose:
+      - "3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URI=${DATABASE_URI}
+      - PAYLOAD_SECRET=${PAYLOAD_SECRET}
+      - PAYLOAD_PUBLIC_SERVER_URL=${CMS_PUBLIC_URL}
+      - PORT=3001
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - iranipplus_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # DATABASE — PostgreSQL 16
+  # ─────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: iranipplus_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    expose:
+      - "5432"
+    networks:
+      - iranipplus_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+        -c max_connections=100
+        -c shared_buffers=128MB
+        -c effective_cache_size=256MB
+        -c wal_compression=on
+
+  # ─────────────────────────────────────────
+  # DB BACKUP — Nightly cron backup
+  # ─────────────────────────────────────────
+  db-backup:
+    image: postgres:16-alpine
+    container_name: iranipplus_backup
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    networks:
+      - iranipplus_net
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+        while true; do
+          sleep 86400
+          FILENAME=/backups/iranipplus_$$(date +%Y%m%d_%H%M%S).sql.gz
+          pg_dump -h db -U ${POSTGRES_USER} ${POSTGRES_DB} | gzip > $$FILENAME
+          echo \"[backup] Saved: $$FILENAME\"
+          find /backups -name '*.sql.gz' -mtime +7 -delete
+          echo \"[backup] Old backups pruned.\"
+        done
+      "
+
+volumes:
+  pg_data:
+    driver: local
+
+networks:
+  iranipplus_net:
+    driver: bridge
