@@ -15,6 +15,6 @@
     "plugins": [{ "name": "next" }],
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "next.config.ts"],
+  "include": ["src", "next.config.mjs"],
   "exclude": ["node_modules", "dist"]
 }
