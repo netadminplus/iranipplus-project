@@ -2,8 +2,8 @@
 FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
 
 # ─── Stage 2: Builder ────────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -11,7 +11,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm install
 RUN npm run build
 
 # ─── Stage 3: Runner ─────────────────────────────────────────────
